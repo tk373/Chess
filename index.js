@@ -149,7 +149,7 @@ function checkIfVallid(target){
                     return true;
                 }
             }
-    break;
+             break;
         case 'knight':
             const possibleMoves = [
                 startId - width * 2 - 1, startId - width * 2 + 1,
@@ -219,5 +219,55 @@ function checkIfVallid(target){
                     if (document.querySelector(`[square-id="${move}"]`).firstChild) break;
                 }
             }
+        case 'rook':
+            const directionsRook = [
+                -1, 1, // Left, right
+                -width, width, // Up, down
+            ];
+        
+            // Check each direction
+            for (let i = 0; i < directionsRook.length; i++) {
+                let move = startId;
+                while (true) {  
+                    move += directionsRook[i];
+                
+                    // Break if the move goes off the board
+                    if (move < 0 || move >= width * width) break;
+                
+                    // Handling to avoid wrapping around the board
+                    if (Math.floor(move / width) !== Math.floor((move - directionsRook[i]) / width) &&
+                        [1, -1].includes(directionsRook[i])) break;
+                
+                    // Check if the move is the target position
+                    if (move === targetId) return true;
+                
+                    // If the move hits another piece
+                    if (document.querySelector(`[square-id="${move}"]`).firstChild) break;
+                }
+            }
+        case 'king':
+            const possibleKingMoves = [
+                startId - width - 1, startId - width, startId - width + 1, // Up-left, Up, Up-right
+                startId - 1, /* skip current position */ startId + 1, // Left, Right
+                startId + width - 1, startId + width, startId + width + 1, // Down-left, Down, Down-right
+            ];
+        
+            // Filter out moves that are off the board or wrap around
+            const validKingMoves = possibleKingMoves.filter(move => {
+                // Check if move is within the board
+                const onBoard = move >= 0 && move < width * width;
+        
+                // Avoid wrapping around the board
+                const rowDifference = Math.abs(Math.floor(move / width) - Math.floor(startId / width));
+                const noWrapAround = rowDifference <= 1;
+        
+                return onBoard && noWrapAround;
+            });
+        
+            // Check if the target square is a valid move
+            if (validKingMoves.includes(targetId)) {
+                return true;
+            }
+            break;
     }
 }
