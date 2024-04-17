@@ -1,14 +1,34 @@
 body{
-    height: 100%;
+    height: 100vh;
     width: 100%;
+    background-color: grey;
+}
+
+
+.CenterDiv{
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #gameboard{
+    display: grid;
+    grid-template-columns: repeat(9, auto); /* Adjust for 9 columns including labels */
+    justify-content: center;
     border: #000000 3px;
     width: 640px;
     width: 640px;
+    grid-gap: 0;
+}
+
+.label {
+    padding: 10px;
+    font-size: 14px;
+    font-weight: bold;
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
 }
 
 .square{
