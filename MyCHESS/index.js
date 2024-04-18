@@ -5,6 +5,15 @@ const width = 8
 let playergo = 'white'
 playerdisplay.textContent = 'white'
 let isChecked = false;
+let startpositionId
+let draggedElement
+let kingMoved = { 'white': false, 'black': false };
+let rookMoved = { 'white': { 'left': false, 'right': false }, 'black': { 'left': false, 'right': false } };
+
+document.querySelector("#startGameButton").addEventListener("click", function() {
+    createGameBoard(); 
+    reverseIds()
+});
 
 const startpieces = [
     rook, knight, bishop, queen, king, bishop, knight, rook,
@@ -18,12 +27,10 @@ const startpieces = [
 ]
 
 function createGameBoard() {
-    // Add an offset div for alignment at the top left corner
     const topLeftCorner = document.createElement('div');
     topLeftCorner.classList.add('label');
     gameboard.appendChild(topLeftCorner);
 
-    // Create the top row for letters A-H
     for (let i = 0; i < width; i++) {
         const letter = document.createElement('div');
         letter.classList.add('label');
@@ -52,11 +59,10 @@ function createGameBoard() {
             square.classList.add(i % 2 === 0 ? "brown" : "beige");
         }
 
-        // Assign classes to black and white pieces for better identification
-        if (i < 16 && square.firstChild) { // Black pieces
+        if (i < 16 && square.firstChild) { 
             square.firstChild.classList.add('black');
         }
-        if (i >= 48 && square.firstChild) { // White pieces
+        if (i >= 48 && square.firstChild) {
             square.firstChild.classList.add('white');
         }
 
@@ -74,24 +80,15 @@ function createGameBoard() {
         }
         gameboard.appendChild(bottomAlign);
     }
+
+    const allsquares = document.querySelectorAll("#gameboard .square")
+    console.log(allsquares);
+    allsquares.forEach(square => {
+        square.addEventListener('dragstart', dragStart)
+        square.addEventListener('dragover', dragOver)
+        square.addEventListener('drop', dragDrop)
+    })
 }
-
-
-
-createGameBoard()
-reverseIds()
-
-
-const allsquares = document.querySelectorAll("#gameboard .square")
-
-allsquares.forEach(square => {
-    square.addEventListener('dragstart', dragStart)
-    square.addEventListener('dragover', dragOver)
-    square.addEventListener('drop', dragDrop)
-})
-
-let startpositionId
-let draggedElement
 
 function dragStart(e){
     if (!e.target.classList.contains(playergo)) {
@@ -107,8 +104,7 @@ function dragOver(e){
     e.preventDefault()
 }
 
-
-function dragDrop(e){
+function dragDrop(e) {
     e.preventDefault();
     e.stopPropagation();
     const correctGo = draggedElement.classList.contains(playergo);
@@ -120,39 +116,41 @@ function dragDrop(e){
     const targetId = parseInt(targetSquare.getAttribute('square-id'));
 
     if (draggedElement.id === 'king' && Math.abs(startpositionId - targetId) === 2) {
-        performCastle(parseInt(startpositionId), targetId);
+        if (performCastle(parseInt(startpositionId), targetId)) {
+            changePlayer();
+        }
         return;
     }
 
-    if(correctGo){
-
-        if(takenByOpponent && valid){
-            e.target.parentNode.append(draggedElement)
-            e.target.remove()
-            changePlayer()
-            if (isKingInCheck(playergo)) {
-                isChecked = true;
-                infordisplay.textContent = 'Check!';
+    if (correctGo && valid) {
+        if (takenByOpponent) {
+            let captureSuccessful = movePiece(startpositionId, targetId, draggedElement);
+            if (captureSuccessful) {
+                e.target.remove();
+                changePlayer();
             }
-            return
-        }
-        if(taken &&! takenByOpponent){
-            return
-        }
-        if (valid){
-            e.target.append(draggedElement)
-            changePlayer()
-            if (isKingInCheck(playergo)) {
-                isChecked = true;
-                infordisplay.textContent = 'Check!';
-            }else{
-                isChecked = false;
-                infordisplay.textContent = '';
+        } else if (!taken) {
+            if (movePiece(startpositionId, targetId, draggedElement)) {
+                changePlayer();
             }
-            return
         }
     }
-   
+}
+
+function movePiece(startId, targetId, draggedElement) {
+    const startSquare = document.querySelector(`[square-id="${startId}"]`);
+    const targetSquare = document.querySelector(`[square-id="${targetId}"]`);
+
+    targetSquare.appendChild(draggedElement); // Move the piece to the new square
+
+    if (isKingInCheck(playergo)) {
+        startSquare.appendChild(draggedElement); // Move the piece back if the move is illegal
+        infordisplay.textContent = 'Check! Move not allowed.';
+        return false;
+    } else {
+        infordisplay.textContent = ''; // Clear any previous messages
+        return true;
+    }
 }
 
 function changePlayer(){
@@ -338,7 +336,6 @@ function checkIfVallid(target){
 
 function isKingInCheck(player) {
     let kingPosition = findKing(player);
-    console.log("kingpostion " +kingPosition);
     if (kingPosition === undefined) {
         console.error(player + ' king not found on the board.');
         return false; 
@@ -354,32 +351,31 @@ function isKingInCheck(player) {
 
     // Check for linear threats from rook, queen, bishop
     if (checkLinearThreats(kingPosition, threatDirections, opponent)) {
+        console.log("linear thread");
         return true;
     }
     // Check for knight threats
     if (checkKnightThreat(kingPosition, opponent)) {
+        console.log("kngiht thread");
         return true;
     }
 
     // Check for pawn threats
     if (checkPawnThreat(kingPosition, opponent)) {
+        console.log("pawn thread");
         return true;
     }
 
-    console.log("King is not in check");
     return false; // No threats detected
 }
 
 function findKing(player) {
-    const pieceClass = `${player}`;
+    const playerGo = `${player}`;
 
     const squares = document.querySelectorAll('#gameboard .square');
 
     for (let square of squares) {
-        if (square.firstChild 
-            && square.firstChild.classList.contains(pieceClass) 
-            && square.firstChild.id === "king") {
-            // Return the square-id of the king's position
+        if (square.firstChild  && square.firstChild.classList.contains(playerGo) && square.firstChild.id === "king") {
             return square.getAttribute('square-id');    
         }
     }
@@ -389,22 +385,31 @@ function findKing(player) {
 }
 
 function checkLinearThreats(kingPosition, directions, opponent) {
+    const width = 8; // Assuming the board is 8x8
     const kingRow = Math.floor(kingPosition / width);
     const kingCol = kingPosition % width;
 
     for (let dir of directions) {
         let row = kingRow + dir.dy;
         let col = kingCol + dir.dx;
-        while (row >= 0 && row < 8 && col >= 0 && col < 8) {
+
+        while (row >= 0 && row < width && col >= 0 && col < width) {
             const id = row * width + col;
             const square = document.querySelector(`[square-id="${id}"]`);
+
             if (square && square.firstChild) {
-                if (square.firstChild.classList.contains(opponent) &&
-                    (square.innerHTML.includes('queen') || square.innerHTML.includes('rook') || square.innerHTML.includes('bishop'))) {
-                    return true;
+                const piece = square.firstChild;
+                if (piece.classList.contains(opponent)) {
+                    // Log the threatening piece and its position if it can move in a straight line and matches the type that can threaten from the current direction
+                    if ((dir.dx === 0 || dir.dy === 0) && (piece.id === 'queen' || piece.id === 'rook') ||
+                        (dir.dx !== 0 && dir.dy !== 0) && (piece.id === 'queen' || piece.id === 'bishop')) {
+                        console.log(`King is in check by ${piece.id} at position (${row}, ${col})`);
+                        return true;
+                    }
                 }
-                break; // stop at the first blocked path
+                break; // Any piece blocks further line of sight
             }
+
             row += dir.dy;
             col += dir.dx;
         }
@@ -427,43 +432,55 @@ function checkKnightThreat(kingPosition, opponent) {
 }
 
 function checkPawnThreat(kingPosition, opponent) {
-    let offsets = opponent === 'white' ? [-9, -7] : [7, 9]; 
+    // Calculate the king's position in terms of row and column
+    const kingRow = Math.floor(kingPosition / width);
+    const kingCol = kingPosition % width;
+
+    // Since all pawns move from bottom to top, check the squares 'above' the king
+    let offsets = [-9, -7];  // These are the indices for the diagonal upward moves
     return offsets.some(offset => {
-        const pos = kingPosition + offset;
-        if (pos < 0 || pos >= 64) return false;
-        const square = document.querySelector(`[square-id="${pos}"]`);
-        return square && square.firstChild && square.firstChild.classList.contains(opponent) && square.innerHTML.includes('pawn');
+        const newRow = kingRow + Math.floor(offset / width);  // Calculate the new row
+        const newCol = kingCol + (offset % width);            // Calculate the new column
+        const pos = newRow * width + newCol;                  // Convert back to a single index
+
+        // Check if the new position is within the board
+        if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+            const square = document.querySelector(`[square-id="${pos}"]`);
+            return square && square.firstChild && square.firstChild.classList.contains(opponent) && square.firstChild.id === 'pawn';
+        }
+        return false;  // Position is out of bounds, hence no threat
     });
 }
-
-let kingMoved = { 'white': false, 'black': false };
-let rookMoved = { 'white': { 'left': false, 'right': false }, 'black': { 'left': false, 'right': false } };
 
 function canCastle(kingId, targetId) {
     kingId = parseInt(kingId, 10);
     targetId = parseInt(targetId, 10);
 
-    const direction = targetId > kingId ? 'right' : 'left';
-    const rookId = direction === 'right' ? kingId + 3 : kingId - 4;
+    const direction = targetId > kingId ? 'left' : 'right';
+    const rookId = direction === 'right' ? kingId - 3 : kingId + 4;
 
     if (kingMoved[playergo] || rookMoved[playergo][direction]) {
         console.log("Castling failed: King or Rook has moved");
         return false;
     }
 
-    const step = direction === 'right' ? 1 : -1;
-    for (let i = kingId + step; i !== rookId + step; i += step) {
-        if (document.querySelector(`[square-id="${i}"]`).firstChild) {
-            console.log("Castling failed: Path between King and Rook is not clear");
-            return false;
-        }
+    const step = direction === 'right' ? -1 : +1;
+    // Adjust endSquare to stop checking one square before reaching the rook
+    const endSquare = direction === 'right' ? rookId + 1 : rookId - 1;
+
+for (let i = kingId + step; i !== endSquare + step; i += step) {
+    // Check each square to see if it is occupied
+    if (document.querySelector(`[square-id="${i}"]`).firstChild) {
+        console.log(`Checking path for castling: King at ${kingId}, Rook at ${rookId}, direction ${direction}, checking from ${kingId + step} to ${endSquare}`);
+        return false;
     }
+}
 
     if (isChecked || isKingInCheckDuringCastling(kingId, step, targetId)) {
         console.log("Castling failed: King is in check");
         return false;
     }
-
+    console.log(`Checking path for castling: King at ${kingId}, Rook at ${rookId}, direction ${direction}, checking from ${kingId + step} to ${endSquare}`);
     return true;
 }
 
@@ -474,7 +491,7 @@ function performCastle(startId, targetId) {
     }
 
     const direction = targetId > startId ? 'right' : 'left';
-    const rookStartId = direction === 'right' ? startId + 3 : startId - 4;
+    const rookStartId = direction === 'right' ? startId + 4 : startId - 3;
     const rookEndId = direction === 'right' ? targetId - 1 : targetId + 1;
 
     const king = document.querySelector(`[square-id="${startId}"]`).firstChild;
@@ -487,25 +504,23 @@ function performCastle(startId, targetId) {
     rookMoved[playergo][direction] = true;
     changePlayer();
 
-    console.log("Castling performed successfully");
 }
 
 function isKingInCheckDuringCastling(kingId, step, targetId) {
     const positionsToCheck = [kingId, kingId + step, targetId];
     for (let position of positionsToCheck) {
-        if (isKingInCheckBasedOnPosition(playergo, position)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function isKingInCheckDuringCastling(kingId, rookId, step) {
-    // Check positions king moves through during castling
-    for (let i = kingId; i !== rookId; i += step) {
         if (isKingInCheck(playergo)) {
             return true;
         }
     }
     return false;
 }
+
+/*
+-Cant win the game
+-doesnt recognise discovery checks immediately
+-pawn checks dont get recognised
+-cant take the piece giving a check even thought it should be an allowed move
+-can still castle even thought the rook has moved
+-Can still castle into check
+*/

@@ -2,6 +2,7 @@ body{
     height: 100vh;
     width: 100%;
     background-color: grey;
+    margin: 0px;
 }
 
 
@@ -10,15 +11,26 @@ body{
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-wrap: nowrap; /* Prevents wrapping of elements */
+}
+
+.InfoDiv {
+    flex: 0 1 auto; /* Flex-grow is 0, flex-shrink is 1, flex-basis is auto */
+    width: 300px; /* or whatever fixed width suits your design */
+    min-width: 300px; /* Ensures InfoDiv does not shrink below a certain width */
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box; /* Includes padding in the width */
 }
 
 #gameboard{
+    flex: 0 0 auto;
     display: grid;
     grid-template-columns: repeat(9, auto); /* Adjust for 9 columns including labels */
     justify-content: center;
     border: #000000 3px;
-    width: 640px;
-    width: 640px;
+    width: auto;
+    width: auto;
     grid-gap: 0;
 }
 
@@ -35,7 +47,7 @@ body{
     height: 80px;
     width: 80px;
     position: relative;
-    pointer-events: auto;
+    pointer-events: auto; 
 }
 
 .square svg{
@@ -60,6 +72,9 @@ path{
 
 .piece dragging{
     z-index: 3;
+    opacity: 1;
+    filter: none;
+    transition: none; 
 }
 
 .beige{
