@@ -1,18 +1,17 @@
-const gameboard = document.querySelector("#gameboard")
-const playerdisplay = document.querySelector("#player")
-const infordisplay = document.querySelector("#info-display")
-const width = 8
-let playergo = 'white'
-playerdisplay.textContent = 'white'
-let isChecked = false;
-let startpositionId
-let draggedElement
+const gameboard = document.querySelector("#gameboard");
+const playerdisplay = document.querySelector("#player");
+const infordisplay = document.querySelector("#info-display");
+const width = 8;
+let playergo = 'white';
+playerdisplay.textContent = 'white';
+let isInCheck = false;
+let startpositionId;
+let draggedElement;
 let kingMoved = { 'white': false, 'black': false };
 let rookMoved = { 'white': { 'left': false, 'right': false }, 'black': { 'left': false, 'right': false } };
 
 document.querySelector("#startGameButton").addEventListener("click", function() {
-    createGameBoard(); 
-    reverseIds()
+    createGameBoard();
 });
 
 const startpieces = [
@@ -27,6 +26,7 @@ const startpieces = [
 ]
 
 function createGameBoard() {
+    gameboard.innerHTML = ''; // Clear previous board
     const topLeftCorner = document.createElement('div');
     topLeftCorner.classList.add('label');
     gameboard.appendChild(topLeftCorner);
@@ -34,7 +34,7 @@ function createGameBoard() {
     for (let i = 0; i < width; i++) {
         const letter = document.createElement('div');
         letter.classList.add('label');
-        letter.textContent = String.fromCharCode('A'.charCodeAt(0) + i); 
+        letter.textContent = String.fromCharCode('A'.charCodeAt(0) + i);
         gameboard.appendChild(letter);
     }
 
@@ -42,7 +42,7 @@ function createGameBoard() {
         if (i % width === 0) {
             const number = document.createElement('div');
             number.classList.add('label');
-            number.textContent = 8 - Math.floor(i / width); 
+            number.textContent = 8 - Math.floor(i / width);
             gameboard.appendChild(number);
         }
 
@@ -59,7 +59,7 @@ function createGameBoard() {
             square.classList.add(i % 2 === 0 ? "brown" : "beige");
         }
 
-        if (i < 16 && square.firstChild) { 
+        if (i < 16 && square.firstChild) {
             square.firstChild.classList.add('black');
         }
         if (i >= 48 && square.firstChild) {
@@ -84,10 +84,10 @@ function createGameBoard() {
     const allsquares = document.querySelectorAll("#gameboard .square")
     console.log(allsquares);
     allsquares.forEach(square => {
-        square.addEventListener('dragstart', dragStart)
-        square.addEventListener('dragover', dragOver)
-        square.addEventListener('drop', dragDrop)
-    })
+        square.addEventListener('dragstart', dragStart);
+        square.addEventListener('dragover', dragOver);
+        square.addEventListener('drop', dragDrop);
+    });
 }
 
 function dragStart(e){
@@ -109,7 +109,7 @@ function dragDrop(e) {
     e.stopPropagation();
     const correctGo = draggedElement.classList.contains(playergo);
     const taken = e.target.classList.contains('piece');
-    const valid = checkIfVallid(e.target);
+    const valid = checkIfValid(e.target);
     const opponentGo = playergo === 'black' ? 'white' : 'black';
     const takenByOpponent = e.target?.classList.contains(opponentGo);
     const targetSquare = e.target.classList.contains('square') ? e.target : e.target.parentNode;
@@ -140,14 +140,24 @@ function dragDrop(e) {
 function movePiece(startId, targetId, draggedElement) {
     const startSquare = document.querySelector(`[square-id="${startId}"]`);
     const targetSquare = document.querySelector(`[square-id="${targetId}"]`);
+    const piece = targetSquare.firstChild;
 
-    targetSquare.appendChild(draggedElement); // Move the piece to the new square
+    // Move the piece to the target square temporarily and remove the piece on the targetsquare
+    targetSquare.appendChild(draggedElement);
+    if(piece){
+        piece.remove();
+    }
 
+    // Check if the move places your king in check
     if (isKingInCheck(playergo)) {
-        startSquare.appendChild(draggedElement); // Move the piece back if the move is illegal
+        // If the move results in a check, undo it
+        startSquare.appendChild(draggedElement);
+        if (piece) targetSquare.appendChild(piece); // Return any captured piece back to its original position
         infordisplay.textContent = 'Check! Move not allowed.';
         return false;
     } else {
+        // If the move is valid, update UI and return true
+        if (piece) piece.remove(); // Remove the captured piece from the board if any
         infordisplay.textContent = ''; // Clear any previous messages
         return true;
     }
@@ -155,183 +165,143 @@ function movePiece(startId, targetId, draggedElement) {
 
 function changePlayer(){
     if(playergo === 'black'){
-        playergo = 'white'
-        playerdisplay.textContent = 'white'
-        reverseIds()
+        playergo = 'white';
+        playerdisplay.textContent = 'white';
     } else {
-        revertIds()
-        playergo = 'black'
-        playerdisplay.textContent = 'black'
+        playergo = 'black';
+        playerdisplay.textContent = 'black';
     }
 }
 
-function reverseIds(){
-    const allsquares = document.querySelectorAll(".square")
-    allsquares.forEach((square, i) => square.setAttribute('square-id', (width * width -1) - i))
-}
+function checkIfValid(target) {
+    const targetId = Number(target.getAttribute('square-id')) || Number(target.parentNode.getAttribute('square-id'));
+    const startId = Number(startpositionId);
+    const piece = draggedElement.id;
+    const pieceColor = draggedElement.classList.contains('white') ? 'white' : 'black';
+    const direction = pieceColor === 'white' ? -1 : 1;
 
-function revertIds(){
-    const allsquares = document.querySelectorAll(".square")
-    allsquares.forEach((square, i) => square.setAttribute('square-id', i))
-}
-
-function checkIfVallid(target){
-    const targetId = Number(target.getAttribute('square-id')) || Number(target.parentNode.getAttribute('square-id'))
-    const startId = Number(startpositionId)
-    const piece = draggedElement.id
-
-    switch(piece){
-        case 'pawn': 
-            const startingRows = [8, 9, 10, 11, 12, 13, 14, 15];
-            const isPawnStartingRow = startingRows.includes(startId);
-
-            // Forward movement - one square
-            if (startId + width === targetId && !document.querySelector(`[square-id="${targetId}"]`).firstChild) {
+    switch (piece) {
+        case 'pawn':
+            // Standard forward move
+            if (targetId === startId + direction * width && !target.firstChild) {
                 return true;
             }
-            // Initial two-square move
-            if (isPawnStartingRow && startId + 2 * width === targetId &&
-                !document.querySelector(`[square-id="${targetId}"]`).firstChild &&
-                !document.querySelector(`[square-id="${startId + width}"]`).firstChild) {
+            // Double move from the starting position
+            if ((pieceColor === 'white' && Math.floor(startId / width) === 6 || pieceColor === 'black' && Math.floor(startId / width) === 1) &&
+                targetId === startId + direction * 2 * width &&
+                !target.firstChild &&
+                !document.querySelector(`[square-id="${startId + direction * width}"]`).firstChild) {
                 return true;
             }
-            // Diagonal capture
-            const diagonalTargets = [startId + width - 1, startId + width + 1];
-            for (let i = 0; i < diagonalTargets.length; i++) {
-                const diagTargetId = diagonalTargets[i];
-                const targetSquare = document.querySelector(`[square-id="${diagTargetId}"]`);
-                if (diagTargetId === targetId && targetSquare && targetSquare.firstChild) {
+            const captureTargets = [startId + direction * width - 1, startId + direction * width + 1];
+            if (captureTargets.includes(targetId)) {
+                const targetSquare = document.querySelector(`[square-id="${targetId}"]`);
+                if (targetSquare && targetSquare.firstChild && targetSquare.firstChild.classList.contains(pieceColor === 'white' ? 'black' : 'white')) {
                     return true;
                 }
             }
-            return false
-             case 'knight':
-                const possibleMoves = [
-                    startId - 17, startId - 15,
-                    startId + 17, startId + 15,
-                    startId - 10, startId + 10,
-                    startId - 6, startId + 6
+            break;
+            case 'knight':
+                const knightMoves = [
+                    -17, -15, -10, -6, 6, 10, 15, 17
                 ];
-                
-                // Filter out moves that are off the board or wrap around
-                const validMoves = possibleMoves.filter(move => {
-                    const onBoard = move >= 0 && move < 64; // Ensure the move is on the board
-                    const rowDiff = Math.floor(move / 8) - Math.floor(startId / 8);
-                    const colDiff = move % 8 - startId % 8;
-                    // Prevent wrapping around the board
-                    return onBoard && Math.abs(rowDiff) <= 2 && Math.abs(colDiff) <= 2 && (Math.abs(rowDiff) + Math.abs(colDiff) === 3);
-                });
+                if (knightMoves.includes(targetId - startId)) {
+                    const colStart = startId % width;
+                    const colTarget = targetId % width;
+                    const rowStart = Math.floor(startId / width);
+                    const rowTarget = Math.floor(targetId / width);
+                    const rowDiff = Math.abs(rowTarget - rowStart);
+                    const colDiff = Math.abs(colTarget - colStart);
     
-                // Check if the target position is a valid knight move
-                if (validMoves.includes(targetId)) {
-                    return true;
+                    if (rowDiff == 1 && colDiff == 2 || rowDiff == 2 && colDiff == 1) {
+                        return true;
+                    }
                 }
                 break;
 
-        case 'queen':
-            const directionsQueen = [
-                -1, 1, // Left, right
-                -width, width, // Up, down
-                -width - 1, -width + 1, // Diagonal up
-                width - 1, width + 1 // Diagonal down
-            ];
-        
-            // Check each direction
-            for (let i = 0; i < directionsQueen.length; i++) {
-                let move = startId;
-                while (true) {  
-                    move += directionsQueen[i];
-                
-                    // Break if the move goes off the board
-                    if (move < 0 || move >= width * width) break;
-                
-                    // Handling to avoid wrapping around the board
-                    if (Math.floor(move / width) !== Math.floor((move - directionsQueen[i]) / width) &&
-                        [1, -1].includes(directionsQueen[i])) break;
-                
-                    // Check if the move is the target position
-                    if (move === targetId) return true;
-                
-                    // If the move hits another piece
-                    if (document.querySelector(`[square-id="${move}"]`).firstChild) break;
-                }
-            }
         case 'bishop':
-            const directionsBishop = [
-                -width - 1, -width + 1, // Diagonal up
-                width - 1, width + 1 // Diagonal down
-            ];
-            // Check each direction
-            for (let i = 0; i < directionsBishop.length; i++) {
-                let move = startId;
-                while (true) {  
-                    move += directionsBishop[i];
-                
-                    // Break if the move goes off the board
-                    if (move < 0 || move >= width * width) break;
-                
-                    // Handling to avoid wrapping around the board
-                    if (Math.floor(move / width) !== Math.floor((move - directionsBishop[i]) / width) &&
-                        [1, -1].includes(directionsBishop[i])) break;
-                
-                    // Check if the move is the target position
-                    if (move === targetId) return true;
-                
-                    // If the move hits another piece
-                    if (document.querySelector(`[square-id="${move}"]`).firstChild) break;
-                }
-            }
+            return DiagonalValidMoves(startId, targetId);
+
         case 'rook':
-            const directionsRook = [
-                -1, 1, // Left, right
-                -width, width, // Up, down
-            ];
-        
-            // Check each direction
-            for (let i = 0; i < directionsRook.length; i++) {
-                let move = startId;
-                while (true) {  
-                    move += directionsRook[i];
-                
-                    // Break if the move goes off the board
-                    if (move < 0 || move >= width * width) break;
-                
-                    // Handling to avoid wrapping around the board
-                    if (Math.floor(move / width) !== Math.floor((move - directionsRook[i]) / width) &&
-                        [1, -1].includes(directionsRook[i])) break;
-                
-                    // Check if the move is the target position
-                    if (move === targetId) return true;
-                
-                    // If the move hits another piece
-                    if (document.querySelector(`[square-id="${move}"]`).firstChild) break;
-                }
-            }
+            return horizontalVertikalMoves(startId, targetId);
+
+        case 'queen':
+            console.log(horizontalVertikalMoves(startId, targetId));
+            return DiagonalValidMoves(startId, targetId) || horizontalVertikalMoves(startId, targetId);
+
         case 'king':
-            const possibleKingMoves = [
-                startId - width - 1, startId - width, startId - width + 1, // Up-left, Up, Up-right
-                startId - 1, /* skip current position */ startId + 1, // Left, Right
-                startId + width - 1, startId + width, startId + width + 1, // Down-left, Down, Down-right
+            const kingMoves = [
+                startId - 1, startId + 1, startId - width, startId + width,
+                startId - width - 1, startId - width + 1, startId + width - 1, startId + width + 1
             ];
-        
-            // Filter out moves that are off the board or wrap around
-            const validKingMoves = possibleKingMoves.filter(move => {
-                // Check if move is within the board
-                const onBoard = move >= 0 && move < width * width;
-        
-                // Avoid wrapping around the board
-                const rowDifference = Math.abs(Math.floor(move / width) - Math.floor(startId / width));
-                const noWrapAround = rowDifference <= 1;
-        
-                return onBoard && noWrapAround;
-            });
-        
-            // Check if the target square is a valid move
-            if (validKingMoves.includes(targetId)) {
-                return true;
+            if (kingMoves.includes(targetId)) {
+                const colStart = startId % width;
+                const colTarget = targetId % width;
+                if (Math.abs(colTarget - colStart) <= 1) {
+                    return true;
+                }
             }
             break;
     }
+    return false;
+}
+
+function DiagonalValidMoves(startId, targetId) {
+    const directions = [-width - 1, -width + 1, width - 1, width + 1];
+    return checkLinearMove(startId, targetId, directions);
+}
+
+function horizontalVertikalMoves(startId, targetId) {
+    const directions = [-1, 1, -width, width];
+    const startRow = Math.floor(startId / width);
+    const startCol = startId % width;
+    
+    for (let direction of directions) {
+        let pos = startId + direction;
+        let currentRow = Math.floor(pos / width);
+        let currentCol = pos % width;
+
+        while (pos >= 0 && pos < 64) {
+            // Ensure we do not wrap around the board horizontally
+            if ([1, -1].includes(direction)) {
+                if (currentCol < 0 || currentCol >= width || Math.abs(currentCol - startCol) > 1) break;
+            }
+            // Handle vertical moves correctly without wrapping
+            if ([width, -width].includes(direction)) {
+                if (currentRow < 0 || currentRow >= width) break;
+            }
+
+            if (pos === targetId) return true;
+
+            // Check if there's a piece blocking the path (break if so)
+            if (document.querySelector(`[square-id="${pos}"]`).firstChild) break;
+
+            // Continue moving in the direction
+            pos += direction;
+            currentRow = Math.floor(pos / width);
+            currentCol = pos % width;
+        }
+    }
+    return false;
+}
+
+function checkLinearMove(startId, targetId, directions) {
+    for (let direction of directions) {
+        let pos = startId + direction;
+        while (pos >= 0 && pos < 64) {
+            const colDifference = Math.abs(Math.floor(pos % width) - Math.floor(startId % width));
+            const rowDifference = Math.abs(Math.floor(pos / width) - Math.floor(startId / width));
+
+            if ([1, -1].includes(direction) && colDifference > 1) break;
+            if ([width, -width].includes(direction) && rowDifference > 1) break;
+
+            if (pos === targetId) return true;
+            if (document.querySelector(`[square-id="${pos}"]`).firstChild) break;
+
+            pos += direction;
+        }
+    }
+    return false;
 }
 
 function isKingInCheck(player) {
@@ -432,23 +402,22 @@ function checkKnightThreat(kingPosition, opponent) {
 }
 
 function checkPawnThreat(kingPosition, opponent) {
-    // Calculate the king's position in terms of row and column
-    const kingRow = Math.floor(kingPosition / width);
-    const kingCol = kingPosition % width;
+    const kingRow = Math.floor(Number(kingPosition) / width);
+    const kingCol = Number(kingPosition) % width;
+    const direction = opponent === 'black' ? -1 : 1;  // Assuming white moves upwards
 
-    // Since all pawns move from bottom to top, check the squares 'above' the king
-    let offsets = [-9, -7];  // These are the indices for the diagonal upward moves
-    return offsets.some(offset => {
-        const newRow = kingRow + Math.floor(offset / width);  // Calculate the new row
-        const newCol = kingCol + (offset % width);            // Calculate the new column
-        const pos = newRow * width + newCol;                  // Convert back to a single index
+    const potentialThreats = [
+        Number(Number(kingPosition) + direction * width - 1), 
+        Number(Number(kingPosition) + direction * width + 1)
+    ];
 
-        // Check if the new position is within the board
-        if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
-            const square = document.querySelector(`[square-id="${pos}"]`);
-            return square && square.firstChild && square.firstChild.classList.contains(opponent) && square.firstChild.id === 'pawn';
-        }
-        return false;  // Position is out of bounds, hence no threat
+    // Check each position for a threatening pawn
+    return potentialThreats.some(pos => {
+        if (pos < 0 || pos >= 64) return false; // Ensure position is within bounds
+        const square = document.querySelector(`[square-id="${pos}"]`);
+        return square && square.firstChild && 
+               square.firstChild.classList.contains(opponent) &&
+               square.firstChild.id === 'pawn';
     });
 }
 
@@ -458,7 +427,6 @@ function canCastle(kingId, targetId) {
 
     const direction = targetId > kingId ? 'left' : 'right';
     const rookId = direction === 'right' ? kingId - 3 : kingId + 4;
-
     if (kingMoved[playergo] || rookMoved[playergo][direction]) {
         console.log("Castling failed: King or Rook has moved");
         return false;
@@ -476,7 +444,7 @@ for (let i = kingId + step; i !== endSquare + step; i += step) {
     }
 }
 
-    if (isChecked || isKingInCheckDuringCastling(kingId, step, targetId)) {
+    if (isInCheck || isKingInCheckDuringCastling(kingId, step, targetId)) {
         console.log("Castling failed: King is in check");
         return false;
     }
@@ -515,12 +483,3 @@ function isKingInCheckDuringCastling(kingId, step, targetId) {
     }
     return false;
 }
-
-/*
--Cant win the game
--doesnt recognise discovery checks immediately
--pawn checks dont get recognised
--cant take the piece giving a check even thought it should be an allowed move
--can still castle even thought the rook has moved
--Can still castle into check
-*/
