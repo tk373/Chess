@@ -52,6 +52,10 @@ function createGameBoard() {
         square.firstChild && square.firstChild.setAttribute('draggable', true);
         square.setAttribute('square-id', i);
         const row = Math.floor(i / width);
+        // Calculate chess notation position for this square
+        const chessPosition = indexToChessNotation(i);
+        square.setAttribute('data-chess-position', chessPosition);
+
 
         if (row % 2 === 0) {
             square.classList.add(i % 2 === 0 ? "beige" : "brown");
@@ -87,6 +91,13 @@ function createGameBoard() {
         square.addEventListener('dragover', dragOver);
         square.addEventListener('drop', dragDrop);
     });
+}
+
+function indexToChessNotation(index) {
+    const width = 8;  // width of the chess board
+    const row = Math.floor(index / width) + 1;
+    const column = String.fromCharCode('a'.charCodeAt(0) + (index % width));
+    return column + (9 - row); // 9 - row because row 1 is at the bottom (8)
 }
 
 function dragStart(e){
@@ -125,16 +136,31 @@ function dragDrop(e) {
             let captureSuccessful = movePiece(startpositionId, targetId, draggedElement);
             if (captureSuccessful) {
                 changePlayer();
+                if (isKingInCheck(playergo)) {
+                    infordisplay.textContent = 'Check!';
+                    if (isCheckmate(playergo)) {
+                        infordisplay.textContent = playergo + " is in checkmate. Game over.";
+                        // Optionally, add any end-of-game handling here
+                    } 
+                }
             }
         } else if (!taken) {
             if (movePiece(startpositionId, targetId, draggedElement)) {
                 changePlayer();
+                if (isKingInCheck(playergo)) {
+                    infordisplay.textContent = 'Check!';
+                    if (isCheckmate(playergo)) {
+                        infordisplay.textContent = playergo + " is in checkmate. Game over.";
+                        // Optionally, add any end-of-game handling here
+                    } 
+                }
             }
         }
     }
 }
 
 function movePiece(startId, targetId, draggedElement) {
+    const opponentGo = playergo === 'black' ? 'white' : 'black';
     const startSquare = document.querySelector(`[square-id="${startId}"]`);
     const targetSquare = document.querySelector(`[square-id="${targetId}"]`);
     const piece = targetSquare.firstChild;
@@ -158,7 +184,7 @@ function movePiece(startId, targetId, draggedElement) {
     if (isKingInCheck(playergo)) {
         // If the move results in a check, undo it
         startSquare.appendChild(draggedElement);
-        if (piece) targetSquare.appendChild(piece); // Return any captured piece back to its original position
+        if (piece) targetSquare.appendChild(piece);
         infordisplay.textContent = 'Check! Move not allowed.';
         return false;
     } else {
@@ -167,6 +193,161 @@ function movePiece(startId, targetId, draggedElement) {
         infordisplay.textContent = ''; // Clear any previous messages
         return true;
     }
+}
+
+function isCheckmate(kingColor) {
+    const kingSquareId = findKing(kingColor);
+    const kingMoves = [
+        kingSquareId - 1, kingSquareId + 1, kingSquareId - width, kingSquareId + width,
+        kingSquareId - width - 1, kingSquareId - width + 1, kingSquareId + width - 1, kingSquareId + width + 1
+    ];
+
+    let noEscape = kingMoves.every(moveId => {
+        // Check if the move is within bounds and the square is not under attack
+        return moveId < 0 || moveId >= 64 || simulateMove(kingSquareId, moveId, document.querySelector(`[square-id="${kingSquareId}"]`).firstChild, () => isKingInCheck(kingColor));
+    });
+
+    return noEscape && !canBlockOrCapture(kingColor);
+}
+
+function calculatePotentialMoves(piece, startId) {
+    let moves = [];
+    const pieceType = piece.id;
+    const pieceColor = piece.classList.contains('white') ? 'white' : 'black';
+    const direction = pieceColor === 'white' ? -1 : 1;  // white moves up, black moves down
+    const startRow = Math.floor(startId / width);
+    const startCol = startId % width;
+
+    switch (pieceType) {
+        case 'pawn':
+            // Forward move
+            let forward = startId + direction * width;
+            if (forward >= 0 && forward < 64 && !document.querySelector(`[square-id="${forward}"]`).firstChild) {
+                moves.push(forward);
+                // Initial double forward move
+                if ((pieceColor === 'white' && startRow === 6) || (pieceColor === 'black' && startRow === 1)) {
+                    let doubleForward = startId + 2 * direction * width;
+                    if (!document.querySelector(`[square-id="${doubleForward}"]`).firstChild) {
+                        moves.push(doubleForward);
+                    }
+                }
+            }
+            // Captures
+            [1, -1].forEach(offset => {
+                let diagonal = startId + direction * width + offset;
+                if (diagonal >= 0 && diagonal < 64 && ((diagonal % width !== 0 || offset !== -1) && (diagonal % width !== 7 || offset !== 1))) {
+                    let targetSquare = document.querySelector(`[square-id="${diagonal}"]`);
+                    if (targetSquare.firstChild && targetSquare.firstChild.classList.contains(pieceColor === 'white' ? 'black' : 'white')) {
+                        moves.push(diagonal);
+                    }
+                }
+            });
+            break;
+
+        case 'knight':
+            [-17, -15, -10, -6, 6, 10, 15, 17].forEach(move => {
+                let target = startId + move;
+                if (target >= 0 && target < 64) {
+                    let rowDiff = Math.abs(Math.floor(target / width) - startRow);
+                    let colDiff = Math.abs((target % width) - startCol);
+                    if ((rowDiff === 2 && colDiff === 1) || (rowDiff === 1 && colDiff === 2)) {
+                        moves.push(target);
+                    }
+                }
+            });
+            break;
+
+        case 'bishop':
+        case 'rook':
+        case 'queen':
+            let directions = [];
+            if (pieceType === 'bishop' || pieceType === 'queen') {
+                directions.push(-width - 1, -width + 1, width - 1, width + 1);  // Diagonal directions
+            }
+            if (pieceType === 'rook' || pieceType === 'queen') {
+                directions.push(-width, width, -1, 1);  // Straight directions
+            }
+            directions.forEach(dir => {
+                for (let pos = startId + dir; pos >= 0 && pos < 64 && Math.floor(pos / width) >= 0 && Math.floor(pos / width) < 8; pos += dir) {
+                    // Check bounds for horizontal wrapping
+                    if (dir === -1 || dir === 1) {
+                        if (Math.floor(pos / width) !== startRow) break;
+                    }
+                    if (document.querySelector(`[square-id="${pos}"]`).firstChild) {
+                        if (document.querySelector(`[square-id="${pos}"]`).firstChild.classList.contains(pieceColor === 'white' ? 'black' : 'white')) {
+                            moves.push(pos);
+                        }
+                        break;
+                    }
+                    moves.push(pos);
+                }
+            });
+            break;
+
+        case 'king':
+            [-width - 1, -width, -width + 1, -1, 1, width - 1, width, width + 1].forEach(move => {
+                let target = startId + move;
+                if (target >= 0 && target < 64 && Math.abs(Math.floor(target / width) - startRow) <= 1 && Math.abs((target % width) - startCol) <= 1) {
+                    moves.push(target);
+                }
+            });
+            break;
+    }
+    return moves.filter(move => move >= 0 && move < 64); // Filter out-of-bounds moves
+}
+
+
+function canBlockOrCapture(kingColor) {
+    const opponentColor = kingColor === 'white' ? 'black' : 'white';
+    const pieces = document.querySelectorAll(`.square .${kingColor}`);
+    let canBlock = false;
+
+    pieces.forEach(piece => {
+        const startId = parseInt(piece.parentNode.getAttribute('square-id'), 10);
+        const potentialMoves = calculatePotentialMoves(piece, startId);
+
+        potentialMoves.forEach(moveId => {
+            if (simulateMove(startId, moveId, piece, () => !isKingInCheck(kingColor))) {
+                canBlock = true;
+            }
+        });
+    });
+
+    return canBlock;
+}
+
+function simulateMove(startId, targetId, pieceElement, callback) {
+    const startSquare = document.querySelector(`[square-id="${startId}"]`);
+    const targetSquare = document.querySelector(`[square-id="${targetId}"]`);
+    const capturedPiece = targetSquare.firstChild;
+
+    // Move the piece to simulate
+    targetSquare.appendChild(pieceElement.cloneNode(true));
+    if (capturedPiece) {
+        capturedPiece.style.display = 'none'; // Temporarily hide the captured piece
+    }
+
+    // Execute callback to check condition (like check status)
+    const result = callback();
+
+    // Undo the move
+    startSquare.appendChild(pieceElement);
+    if (capturedPiece) {
+        capturedPiece.style.display = 'block';
+    }
+    if (targetSquare.firstChild === pieceElement) {
+        targetSquare.removeChild(pieceElement);
+    }
+
+    return result;
+}
+
+function isSquareOccupied(squareId) {
+    const square = document.querySelector(`[square-id="${squareId}"]`);
+    if(square.firstChild){
+        return true
+    }
+    return false;
 }
 
 function changePlayer(){
@@ -232,8 +413,6 @@ function checkIfValid(target) {
             return horizontalVertikalMoves(startId, targetId);
 
         case 'queen':
-            console.log("diagonal "+DiagonalValidMoves(startId, targetId));
-            console.log("horizonzal "+horizontalVertikalMoves(startId, targetId));
             return (DiagonalValidMoves(startId, targetId) || horizontalVertikalMoves(startId, targetId));
 
         case 'king':
@@ -481,7 +660,7 @@ function canCastle(startId, targetId) {
         console.log(`Checking path for castling: King at ${startId}, Rook at ${rookId}, direction ${direction}, checking from ${startId + step} to ${endSquare}`);
         return false;
     }
-}
+    }
 
     if (isKingInCheckDuringCastling(startId, step, targetId)) {
         console.log("Castling failed: King cannot castle in or through checks");
