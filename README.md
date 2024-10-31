@@ -6,6 +6,6 @@ Sadly to this day I havent found the time to finish this project, someday maybe 
 
 # Setup
 
-To run this you only need to serve all the files via a webserver. I'm always using Liveserver, which is an extention in VS Code.
+To run this you only need to serve all the files via a webserver. I always use Liveserver, which is an extention in VS Code.
 
-Ten just press "start game" and a chess board will be generated.
+Then just press "start game" and a chess board will be generated.
